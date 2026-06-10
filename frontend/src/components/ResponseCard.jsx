@@ -31,18 +31,25 @@ export default function ResponseCard({ answer, sources, question }) {
         {renderBold(answer)}
       </div>
 
-      {sources && sources.length > 0 && (
-        <div className="mt-4 pt-3 border-t border-uitm-border dark:border-gray-700 space-y-2">
-          {sources.slice(0, 3).map((s, i) => (
-            <div key={i} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 min-w-0">
-                <FileText size={13} className="text-uitm-gold flex-shrink-0" />
-                <span className="font-medium text-uitm-maroon dark:text-uitm-gold truncate">{s.portal_name}</span>
-                {s.title && s.title !== s.portal_name && (
-                  <span className="text-gray-400 dark:text-gray-500 truncate">— {s.title}</span>
-                )}
-              </div>
-              {s.url && s.url.startsWith('http') && (
+      {(() => {
+        const navigable = sources
+          ? [...new Map(
+              sources
+                .filter(s => s.url && s.url.startsWith('http'))
+                .map(s => [s.url, s])
+            ).values()].slice(0, 3)
+          : [];
+        return navigable.length > 0 ? (
+          <div className="mt-4 pt-3 border-t border-uitm-border dark:border-gray-700 space-y-2">
+            {navigable.map((s, i) => (
+              <div key={i} className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 min-w-0">
+                  <FileText size={13} className="text-uitm-gold flex-shrink-0" />
+                  <span className="font-medium text-uitm-maroon dark:text-uitm-gold truncate">{s.portal_name}</span>
+                  {s.title && s.title !== s.portal_name && (
+                    <span className="text-gray-400 dark:text-gray-500 truncate">— {s.title}</span>
+                  )}
+                </div>
                 <a
                   href={s.url}
                   target="_blank"
@@ -51,11 +58,11 @@ export default function ResponseCard({ answer, sources, question }) {
                 >
                   Visit Portal <ExternalLink size={11} />
                 </a>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        ) : null;
+      })()}
 
       {/* Feedback — only for real answers (greeting/errors pass no question) */}
       {question && (
