@@ -2,27 +2,34 @@ import { useState } from 'react';
 import { ExternalLink, FileText, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { submitFeedback } from '../api';
 
+const LINK_PATTERN = /(\*\*[^*]+\*\*|\[[^\]]*\]\(https?:\/\/[^)]+\)|https?:\/\/\S+)/g;
+
 function renderMarkdown(text) {
-  return text.split(/(\*\*[^*]+\*\*|\[[^\]]*\]\(https?:\/\/[^)]+\))/g).map((seg, i) => {
+  return text.split(LINK_PATTERN).map((seg, i) => {
     if (seg.startsWith('**') && seg.endsWith('**'))
       return <strong key={i} className="font-semibold">{seg.slice(2, -2)}</strong>;
-    const link = seg.match(/^\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
-    if (link)
+    const mdLink = seg.match(/^\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+    if (mdLink)
       return (
-        <a key={i} href={link[2]} target="_blank" rel="noreferrer"
+        <a key={i} href={mdLink[2]} target="_blank" rel="noreferrer"
            className="text-uitm-maroon dark:text-uitm-gold underline hover:opacity-80 break-all">
-          {link[1]}
+          {mdLink[1]}
         </a>
       );
+    if (seg.startsWith('http://') || seg.startsWith('https://')) {
+      const clean = seg.replace(/[.,;:)"'>\]]+$/, '');
+      const trail = seg.slice(clean.length);
+      return (
+        <span key={i}>
+          <a href={clean} target="_blank" rel="noreferrer"
+             className="text-uitm-maroon dark:text-uitm-gold underline hover:opacity-80 break-all">
+            {clean}
+          </a>{trail}
+        </span>
+      );
+    }
     return <span key={i}>{seg}</span>;
   });
-}
-
-function answerHostnames(text) {
-  const hosts = new Set();
-  for (const m of text.matchAll(/https?:\/\/([^/\s),\]]+)/g))
-    hosts.add(m[1].toLowerCase());
-  return hosts;
 }
 
 export default function ResponseCard({ answer, sources, question }) {
@@ -47,15 +54,10 @@ export default function ResponseCard({ answer, sources, question }) {
       </div>
 
       {(() => {
-        const linked = answerHostnames(answer);
         const navigable = sources
           ? [...new Map(
               sources
-                .filter(s => {
-                  if (!s.url || !s.url.startsWith('http')) return false;
-                  try { return !linked.has(new URL(s.url).hostname.toLowerCase()); }
-                  catch { return false; }
-                })
+                .filter(s => s.url && s.url.startsWith('http'))
                 .map(s => [s.url, s])
             ).values()].slice(0, 3)
           : [];
