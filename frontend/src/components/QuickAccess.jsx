@@ -18,8 +18,9 @@ const PORTALS = [
 const SUGGESTED = [
   'How do I register my courses?',
   'Where can I check exam results?',
+  'How to apply for a residential college ("kolej kediaman")?',
   'How to take class attendance?',
-  'How to pay tuition fees?',
+  'How to pay student bills?',
   'When is the convocation?',
 ];
 
