@@ -1,0 +1,66 @@
+[
+  {
+    "id": "main",
+    "name": "UiTM Main Site",
+    "url": "https://www.uitm.edu.my/en/",
+    "max_pages": 15,
+    "last_seeded_at": "2026-06-10T02:33:01.695255",
+    "last_chunk_count": 311
+  },
+  {
+    "id": "istudent",
+    "name": "iStudent Portal Landing",
+    "url": "https://istudent.uitm.edu.my/index_isp.htm",
+    "max_pages": 10,
+    "last_seeded_at": "2026-06-10T03:26:48.121737",
+    "last_chunk_count": 12
+  },
+  {
+    "id": "konvokesyen",
+    "name": "Convocation Portal",
+    "url": "https://konvokesyen.uitm.edu.my/v2/",
+    "max_pages": 15,
+    "last_seeded_at": "2026-06-10T02:12:41.569877",
+    "last_chunk_count": 43
+  },
+  {
+    "id": "hea",
+    "name": "Academic Calendar (HEA)",
+    "url": "https://hea.uitm.edu.my/index.php/calendars/academic-calendar",
+    "max_pages": 10,
+    "last_seeded_at": "2026-06-10T02:20:34.811583",
+    "last_chunk_count": 196
+  },
+  {
+    "id": "bendahari",
+    "name": "Bendahari (Bursary)",
+    "url": "https://bendahari.uitm.edu.my/index.php/component/content/category/37-pelajar",
+    "max_pages": 15,
+    "last_seeded_at": "2026-05-20T03:47:00.511342",
+    "last_chunk_count": 231
+  },
+  {
+    "id": "hep",
+    "name": "HEP Student Conduct",
+    "url": "https://hep.uitm.edu.my/main/index.php/pelajar/sahsiah-rupa-diri-pelajar",
+    "max_pages": 10,
+    "last_seeded_at": "2026-06-10T02:38:47.652591",
+    "last_chunk_count": 76
+  },
+  {
+    "id": "faqsso",
+    "name": "FAQ SSO",
+    "url": "https://faqsso.uitm.edu.my/",
+    "max_pages": 10,
+    "last_seeded_at": "2026-05-20T03:48:02.582814",
+    "last_chunk_count": 74
+  },
+  {
+    "id": "ptar",
+    "name": "PTAR Library Guide",
+    "url": "https://library.uitm.edu.my/",
+    "max_pages": 10,
+    "last_seeded_at": "2026-05-20T03:48:36.410787",
+    "last_chunk_count": 85
+  }
+]

@@ -1,0 +1,26 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Env & secrets
+.env
+*.env.local
+API\ keys.txt
+*keys*.txt
+*secret*.txt
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# Project
+backend/uploads/
+backend/sources_registry.json
