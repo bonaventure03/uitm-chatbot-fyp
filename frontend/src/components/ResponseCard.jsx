@@ -2,12 +2,27 @@ import { useState } from 'react';
 import { ExternalLink, FileText, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { submitFeedback } from '../api';
 
-function renderBold(text) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((seg, i) =>
-    seg.startsWith('**') && seg.endsWith('**')
-      ? <strong key={i} className="font-semibold">{seg.slice(2, -2)}</strong>
-      : <span key={i}>{seg}</span>
-  );
+function renderMarkdown(text) {
+  return text.split(/(\*\*[^*]+\*\*|\[[^\]]*\]\(https?:\/\/[^)]+\))/g).map((seg, i) => {
+    if (seg.startsWith('**') && seg.endsWith('**'))
+      return <strong key={i} className="font-semibold">{seg.slice(2, -2)}</strong>;
+    const link = seg.match(/^\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+    if (link)
+      return (
+        <a key={i} href={link[2]} target="_blank" rel="noreferrer"
+           className="text-uitm-maroon dark:text-uitm-gold underline hover:opacity-80 break-all">
+          {link[1]}
+        </a>
+      );
+    return <span key={i}>{seg}</span>;
+  });
+}
+
+function answerHostnames(text) {
+  const hosts = new Set();
+  for (const m of text.matchAll(/https?:\/\/([^/\s),\]]+)/g))
+    hosts.add(m[1].toLowerCase());
+  return hosts;
 }
 
 export default function ResponseCard({ answer, sources, question }) {
@@ -28,14 +43,19 @@ export default function ResponseCard({ answer, sources, question }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl px-5 py-4 border border-uitm-border dark:border-gray-700 shadow-sm max-w-2xl">
       <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-800 dark:text-gray-200">
-        {renderBold(answer)}
+        {renderMarkdown(answer)}
       </div>
 
       {(() => {
+        const linked = answerHostnames(answer);
         const navigable = sources
           ? [...new Map(
               sources
-                .filter(s => s.url && s.url.startsWith('http'))
+                .filter(s => {
+                  if (!s.url || !s.url.startsWith('http')) return false;
+                  try { return !linked.has(new URL(s.url).hostname.toLowerCase()); }
+                  catch { return false; }
+                })
                 .map(s => [s.url, s])
             ).values()].slice(0, 3)
           : [];
