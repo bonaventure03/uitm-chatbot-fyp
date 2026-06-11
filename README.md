@@ -1,21 +1,30 @@
 # UiTM Campus Assistant Chatbot
 
-A web-based RAG (Retrieval-Augmented Generation) chatbot that serves as a one-stop conversational layer over UiTM's fragmented digital portals — providing step-by-step navigation guides and portal links in response to student queries.
+A RAG-powered chatbot that answers UiTM Samarahan student queries with step-by-step guides and portal links.
 
-Built to match the architecture defined in **CSP600 Report (Bonaventure Tindin, CDCS2303A)** — see report Figures 3.5, 3.7, 3.10, 3.11 and Tables 3.2, 3.5.
+**Final Year Project** — CSP600 / CSP650, Bonaventure Tindin, CDCS2303A
+
+---
 
 ## Tech Stack
 
 | Layer | Tool |
 |-------|------|
-| LLM (answer generation) | **Anthropic Claude Sonnet 4.5** |
-| Embeddings | **OpenAI `text-embedding-3-small`** (1536 dims) |
-| Vector Database | **Pinecone** (serverless, cosine similarity) |
-| Orchestration | **LangChain** |
-| Backend | **FastAPI** + Uvicorn |
-| Frontend | **React 18 + Vite + Tailwind CSS** |
-| Scraping | BeautifulSoup, requests, Selenium |
+| LLM | Anthropic Claude Sonnet 4.6 |
+| Embeddings | OpenAI `text-embedding-3-small` (1536 dims) |
+| Vector DB | Pinecone (serverless, cosine) |
+| Orchestration | LangChain |
+| Backend | FastAPI + Uvicorn + SlowAPI (rate limiting) |
+| Auth | JWT + bcrypt (admin routes) |
+| Storage | Supabase (document files + chat feedback) |
+| Frontend | React 18 + Vite + Tailwind CSS + React Router v7 |
+| Icons | lucide-react |
+| Web scraping | BeautifulSoup, requests, Selenium |
 | Document parsing | pdfplumber, python-docx |
+| Backend deploy | Railway (nixpacks — includes Chromium for Selenium) |
+| Frontend deploy | Vercel |
+
+---
 
 ## Project Structure
 
@@ -23,154 +32,129 @@ Built to match the architecture defined in **CSP600 Report (Bonaventure Tindin, 
 uitm-chatbot/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                  FastAPI entry
-│   │   ├── config.py                Loads .env
-│   │   ├── api/
-│   │   │   ├── chat.py              POST /api/chat
-│   │   │   └── admin.py             Data source management
+│   │   ├── main.py              FastAPI app, CORS, rate limiter
+│   │   ├── config.py            Loads and validates .env
+│   │   ├── limiter.py           SlowAPI rate limiter instance
+│   │   └── api/
+│   │       ├── chat.py          POST /api/chat
+│   │       ├── admin.py         Knowledge base CRUD
+│   │       ├── seed.py          Seed portal management
+│   │       ├── auth.py          Admin login / JWT
+│   │       └── feedback.py      Chat feedback endpoint
 │   │   └── rag/
-│   │       ├── chunker.py           Text splitter
-│   │       ├── vector_store.py      Pinecone + embeddings
-│   │       ├── generator.py         Claude + RAG prompt
+│   │       ├── chunker.py       RecursiveCharacterTextSplitter (500/50)
+│   │       ├── vector_store.py  Pinecone + OpenAI embeddings
+│   │       ├── generator.py     Claude prompt + RAG chain
 │   │       └── loaders/
-│   │           ├── webpage_loader.py    Single URL
-│   │           ├── website_loader.py    Recursive crawler
-│   │           ├── document_loader.py   PDF / DOCX / TXT
-│   │           ├── text_loader.py       Pasted content
-│   │           └── faq_loader.py        Q&A pairs
-│   ├── seed_uitm.py                 One-time seed for UiTM portals
+│   │           ├── webpage_loader.py   Single URL
+│   │           ├── website_loader.py   Recursive crawler
+│   │           ├── text_loader.py      Pasted text
+│   │           └── faq_loader.py       Q&A pairs
 │   ├── requirements.txt
+│   ├── nixpacks.toml            Railway build config (Chromium)
 │   └── .env.example
 └── frontend/
     ├── src/
-    │   ├── App.jsx
-    │   ├── api.js
+    │   ├── App.jsx              Routes + auth guard
+    │   ├── api.js               Axios client + JWT helpers
     │   └── components/
-    │       ├── ChatWindow.jsx       Student chat UI
-    │       ├── QuickAccess.jsx      Portal sidebar
-    │       ├── ResponseCard.jsx     Answer card with source link
-    │       └── AdminPanel.jsx       Knowledge base manager
-    ├── package.json
-    └── tailwind.config.js
+    │       ├── ChatWindow.jsx   Student chat UI
+    │       ├── QuickAccess.jsx  Sidebar with portal links
+    │       ├── ResponseCard.jsx Answer card with source links
+    │       ├── AdminPanel.jsx   Knowledge base manager
+    │       ├── AdminLogin.jsx   Login modal
+    │       ├── ThemeToggle.jsx  Dark / light switch
+    │       └── Preloader.jsx    Startup animation
+    ├── vercel.json              SPA rewrite rule
+    └── package.json
 ```
 
 ---
 
-## Setup
+## Running Locally
 
 ### 1. Backend
 
 ```bash
 cd backend
 
-# Activate your venv (you already created it)
-# Windows:  venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
+# Windows
+python -m venv venv && venv\Scripts\activate
+# Mac/Linux
+python -m venv venv && source venv/bin/activate
 
 pip install -r requirements.txt
 
-# Create .env from template
-cp .env.example .env
-# Edit .env and paste your real API keys
+cp .env.example .env   # then fill in your keys
 ```
 
-Your `.env` must contain:
-- `ANTHROPIC_API_KEY` — from console.anthropic.com
-- `OPENAI_API_KEY` — from platform.openai.com (for embeddings)
-- `PINECONE_API_KEY` — from app.pinecone.io
-- `PINECONE_INDEX_NAME` — must match the index you created (default: `uitm-chatbot-index`)
+Required `.env` values:
 
-### 2. Create the Pinecone Index (one-time)
+| Key | Source |
+|-----|--------|
+| `ANTHROPIC_API_KEY` | console.anthropic.com |
+| `OPENAI_API_KEY` | platform.openai.com |
+| `PINECONE_API_KEY` | app.pinecone.io |
+| `PINECONE_INDEX_NAME` | your index name (default: `uitm-chatbot-index`) |
+| `SUPABASE_URL` | supabase.com project settings |
+| `SUPABASE_KEY` | service role key |
+| `SUPABASE_BUCKET` | storage bucket name (default: `knowledge-base`) |
+| `JWT_SECRET` | run `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | choose your own |
 
-On app.pinecone.io, create an index with:
-- **Name:** `uitm-chatbot-index`
-- **Dimensions:** `1536` (must match OpenAI's text-embedding-3-small)
-- **Metric:** `cosine`
-- **Cloud:** AWS, region `us-east-1`
-
-Alternatively, the app will auto-create it on first run.
-
-### 3. Seed with UiTM Public Portals
-
-```bash
-python seed_uitm.py
-```
-
-This ingests the eight public portals from your report's Table 3.2 (UiTM main site, iStudent landing, Convocation, Academic Calendar, Bendahari, HEP, FAQ SSO, PTAR).
-
-### 4. Start the Backend
+First-time Pinecone setup — create an index with:
+- Dimensions: `1536`, Metric: `cosine`, Cloud: AWS `us-east-1`
 
 ```bash
 uvicorn app.main:app --reload --port 8000
+# API docs → http://localhost:8000/docs
 ```
 
-API docs will be at http://localhost:8000/docs
-
-### 5. Frontend
+### 2. Frontend
 
 ```bash
-cd ../frontend
+cd frontend
 npm install
 npm run dev
+# → http://localhost:5173
 ```
 
-Open http://localhost:5173
+Set `VITE_API_URL=http://localhost:8000` in `frontend/.env` if the default doesn't match.
+
+---
+
+## Deployment
+
+### Backend → Railway
+
+1. Push the `backend/` folder (or the whole repo) to a Railway service.
+2. Railway auto-detects `nixpacks.toml` and installs Chromium + ChromeDriver for Selenium.
+3. Add all `.env` keys as Railway environment variables, plus `APP_ENV=production` and `ALLOWED_ORIGINS=https://your-vercel-app.vercel.app`.
+4. Railway exposes a public HTTPS URL — copy it for the frontend.
+
+### Frontend → Vercel
+
+1. Import the repo into Vercel; set the root directory to `frontend`.
+2. Add `VITE_API_URL=https://your-railway-backend.up.railway.app` as an environment variable.
+3. `vercel.json` already handles SPA routing — no extra config needed.
+4. Deploy. Vercel builds with `npm run build` automatically.
 
 ---
 
 ## How It Works
 
-**Ingestion Pipeline (offline):**
-1. Admin adds a data source via the admin panel (website, webpage, document, text, or FAQ)
-2. The loader extracts clean text and attaches source metadata
-3. `RecursiveCharacterTextSplitter` splits text into 500-char chunks with 50-char overlap (per report Figure 3.11)
-4. OpenAI embeds each chunk into 1536-dim vectors
-5. Pinecone stores them with full metadata
+**Ingestion (admin panel):**
+1. Admin adds a source — website crawl, single URL, document upload, pasted text, or Q&A pairs.
+2. The loader extracts clean text with source metadata.
+3. Text is split into 500-char chunks (50-char overlap) and embedded with OpenAI.
+4. Vectors are stored in Pinecone.
 
-**Query Pipeline (online):**
-1. Student types a question
-2. Query is embedded with the same model
-3. Pinecone returns top-4 most similar chunks (cosine similarity)
-4. Claude receives the question + retrieved chunks in a carefully-designed prompt
-5. Claude generates a **step-by-step answer** with natural, varied phrasing (`temperature=0.7`)
-6. Response card shows the answer + portal links for each source
-
-**Why responses are "not fixed":** Claude's temperature of 0.7 produces different wording each time while the system prompt constrains the *structure* (intro → numbered steps → dates → source link). This gives structural consistency with linguistic variety — exactly what NLP-driven generation provides.
-
----
-
-## Adding Data Sources (chatling.ai-style)
-
-Click the ⚙️ button in the bottom-right of the chat to open the admin panel. Choose a tab:
-
-- **Website** — Crawls an entire site (e.g., all of bendahari.uitm.edu.my up to 20 pages)
-- **Webpage** — A single URL (e.g., HEP dress code page)
-- **Document** — Upload a PDF, DOCX, or TXT — used for password-protected portals where documents are exported manually
-- **Text** — Paste custom content (announcements, summaries)
-- **FAQ** — Q&A pairs, each indexed individually for precise matching
-
----
-
-## Troubleshooting
-
-**"Missing API keys" on startup** — Check `.env`. Keys must not contain placeholder text like `your-key-here`.
-
-**Pinecone index dimension mismatch** — Make sure your index has dimension 1536 to match `text-embedding-3-small`.
-
-**Crawler returns 0 pages** — The UiTM site may use `robots.txt` or rate-limiting. Try the single-webpage loader instead for specific URLs, or add Selenium for JavaScript-heavy pages.
-
-**Claude refuses to answer** — Good! It means the retrieval returned nothing relevant. Add more data sources in the admin panel, or rephrase the question.
-
----
-
-## Report References
-
-- **Architecture:** Figure 3.5 (RAG-based system architecture)
-- **Query Flow:** Figure 3.6 (System flowchart) + Figure 2.3 (NLP-RAG pipeline)
-- **UI Mockup:** Figure 3.7 (UiTM Campus Assistant chatbot)
-- **Chunking & Embedding:** Figure 3.10, 3.11
-- **Target Portals:** Table 3.2
-- **Software Stack:** Table 3.5
+**Query (chat):**
+1. Student sends a question.
+2. Query is embedded with the same model.
+3. Pinecone returns the top-4 most similar chunks.
+4. Claude receives the question + chunks and returns a step-by-step answer.
+5. The response card displays the answer with clickable source links.
 
 ---
 
