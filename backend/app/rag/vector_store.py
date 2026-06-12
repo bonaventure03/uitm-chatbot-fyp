@@ -63,6 +63,16 @@ class VectorStore:
         index = self.pc.Index(config.PINECONE_INDEX_NAME)
         index.delete(filter={"root_url": root_url})
 
+    def delete_by_portal_name(self, portal_name: str):
+        """Delete all chunks with the given portal_name metadata value.
+
+        Useful for cleaning up orphaned vectors whose source registry entry
+        was already removed (e.g. old Playwright crawls deleted from the UI
+        but whose per-page chunks remain in Pinecone).
+        """
+        index = self.pc.Index(config.PINECONE_INDEX_NAME)
+        index.delete(filter={"portal_name": portal_name})
+
     def list_sources(self) -> List[Dict[str, Any]]:
         """List unique data sources currently indexed.
         Note: Pinecone does not have a native 'list metadata' call.

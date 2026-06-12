@@ -163,6 +163,24 @@ async def list_sources(_: str = Depends(verify_token)):
     return {"sources": db.load_sources()}
 
 
+@router.delete("/sources/purge-portal")
+async def purge_portal(portal_name: str, _: str = Depends(verify_token)):
+    """Delete all Pinecone vectors for a given portal_name.
+
+    Use this to clean up orphaned chunks whose registry entry was already
+    removed (e.g. a Playwright crawl that was deleted from the UI but left
+    stale vectors behind). The portal_name must match the metadata value
+    stored when the source was originally ingested.
+    """
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Vector store not configured.")
+    try:
+        vector_store.delete_by_portal_name(portal_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "ok", "purged_portal": portal_name}
+
+
 @router.delete("/sources/{source_id}")
 async def delete_source(source_id: str, _: str = Depends(verify_token)):
     entry = db.delete_source(source_id)
@@ -171,7 +189,11 @@ async def delete_source(source_id: str, _: str = Depends(verify_token)):
 
     if vector_store:
         try:
-            vector_store.delete_by_source(entry["url"])
+            if entry.get("source_type") == "website":
+                # Website crawls tag every page chunk with root_url, not source
+                vector_store.delete_by_root_url(entry["url"])
+            else:
+                vector_store.delete_by_source(entry["url"])
         except Exception as e:
             print(f"Warning: could not delete from vector store: {e}")
 
