@@ -104,14 +104,14 @@ class RAGGenerator:
 
         # Pass 1 — markdown links [any text](URL): capture only the href
         for m in re.finditer(r'\[[^\]]*\]\((https?://[^)\s]+)\)', text):
-            url = m.group(1).rstrip('.,;:\'"')
+            url = m.group(1).rstrip('.,;:\'\"*')
             if url not in seen:
                 seen.add(url)
                 urls.append(url)
 
         # Pass 2 — bare URLs not already captured (negative lookbehind skips markdown hrefs)
         for m in re.finditer(r'(?<!\()(https?://[^\s\[\]()<>"\' ]+)', text):
-            url = m.group(1).rstrip('.,;:\'")')
+            url = m.group(1).rstrip('.,;:\'\")*')
             if url not in seen:
                 seen.add(url)
                 urls.append(url)
