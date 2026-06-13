@@ -1,19 +1,41 @@
 """Registry persistence — Supabase when configured, local JSON fallback otherwise.
 
-Two registries live here:
-  sources      — replaces sources_registry.json
-  seed_portals — replaces seed_portals.json
+Three registries live here:
+  sources      — knowledge base source entries
+  seed_portals — UiTM portal crawl config
+  chat_logs    — per-message log for analytics
 """
 import json
 import uuid
-from datetime import datetime
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Optional
 
 from app.config import config
 
-_REGISTRY_PATH = Path(__file__).parent.parent / "sources_registry.json"
-_PORTALS_PATH = Path(__file__).parent.parent / "seed_portals.json"
+_REGISTRY_PATH  = Path(__file__).parent.parent / "sources_registry.json"
+_PORTALS_PATH   = Path(__file__).parent.parent / "seed_portals.json"
+_CHAT_LOGS_PATH = Path(__file__).parent.parent / "chat_logs.json"
+
+# ── Topic keyword classifier ───────────────────────────────────────────────────
+
+_TOPICS = [
+    ("Fees & Payment",      ["fee", "pay", "payment", "bill", "receipt", "fpx", "bendahari", "bursary"]),
+    ("Course Registration", ["register", "registration", "course", "subject", "ecr", "enroll", "drop"]),
+    ("Exams & Results",     ["exam", "result", "grade", "cgpa", "gpa", "pointer", "muet", "test", "final"]),
+    ("Library / PTAR",      ["library", "ptar", "book", "journal", "ebook", "thesis", "permata", "borrow"]),
+    ("Hostel & HEP",        ["hostel", "hep", "accommodation", "room", "dress", "attire", "college"]),
+    ("Password & IT",       ["password", "reset", "login", "account", "email", "sso", "forgot"]),
+    ("Convocation",         ["convo", "convocation", "graduation", "scroll", "ceremony"]),
+]
+
+def _classify_topic(question: str) -> str:
+    q = question.lower()
+    for topic, keywords in _TOPICS:
+        if any(kw in q for kw in keywords):
+            return topic
+    return "Other"
 
 
 def _client():
@@ -155,3 +177,128 @@ def delete_portal(portal_id: str) -> Optional[dict]:
     if not result.data:
         return None
     return result.data[0]
+
+
+# ── Chat Logs ─────────────────────────────────────────────────────────────────
+
+def _load_chat_logs() -> list[dict]:
+    if not _CHAT_LOGS_PATH.exists():
+        return []
+    with open(_CHAT_LOGS_PATH) as f:
+        return json.load(f)
+
+
+def log_chat(question: str, had_answer: bool) -> None:
+    """Store one chat log entry. Non-critical — never raises."""
+    c = _client()
+    entry = {
+        "id": str(uuid.uuid4()),
+        "question": question.strip()[:500],
+        "had_answer": had_answer,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    try:
+        if c is None:
+            logs = _load_chat_logs()
+            logs.append(entry)
+            if len(logs) > 10_000:
+                logs = logs[-10_000:]
+            with open(_CHAT_LOGS_PATH, "w") as f:
+                json.dump(logs, f)
+        else:
+            c.table("chat_logs").insert(entry).execute()
+    except Exception:
+        pass
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+def get_analytics(days: int = 30) -> dict:
+    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    c = _client()
+
+    # Chat logs
+    if c is None:
+        logs = [l for l in _load_chat_logs() if l.get("created_at", "") >= cutoff]
+        fb_up = fb_down = 0
+        fb_by_q: dict = {}
+    else:
+        try:
+            logs = (c.table("chat_logs").select("*").gte("created_at", cutoff).execute().data or [])
+        except Exception:
+            logs = []
+        try:
+            fb_rows = (c.table("feedback").select("question,rating").gte("created_at", cutoff).execute().data or [])
+            fb_up   = sum(1 for r in fb_rows if r["rating"] == "up")
+            fb_down = sum(1 for r in fb_rows if r["rating"] == "down")
+            fb_by_q: dict = {}
+            for r in fb_rows:
+                k = (r.get("question") or "").strip().lower()
+                fb_by_q.setdefault(k, {"up": 0, "down": 0})[r["rating"]] += 1
+        except Exception:
+            fb_up = fb_down = 0
+            fb_by_q = {}
+
+    total      = len(logs)
+    fallbacks  = sum(1 for l in logs if not l.get("had_answer", True))
+    total_fb   = fb_up + fb_down
+
+    # Daily counts (last 14 days for chart)
+    daily: dict[str, int] = defaultdict(int)
+    for l in logs:
+        daily[l.get("created_at", "")[:10]] += 1
+    today = datetime.utcnow().date()
+    daily_counts = [
+        {"date": (today - timedelta(days=i)).isoformat(),
+         "count": daily.get((today - timedelta(days=i)).isoformat(), 0)}
+        for i in range(13, -1, -1)
+    ]
+
+    # Top questions
+    q_counts = Counter((l.get("question") or "").strip().lower() for l in logs if l.get("question"))
+    top_questions = []
+    for q_lower, cnt in q_counts.most_common(8):
+        original = next((l["question"] for l in logs if (l.get("question") or "").strip().lower() == q_lower), q_lower)
+        fb = fb_by_q.get(q_lower, {"up": 0, "down": 0})
+        t = fb["up"] + fb["down"]
+        top_questions.append({
+            "question": original[:80],
+            "count": cnt,
+            "satisfaction": round(fb["up"] / t, 2) if t else None,
+        })
+
+    # Topics
+    topic_counts: dict[str, int] = defaultdict(int)
+    for l in logs:
+        topic_counts[_classify_topic(l.get("question", ""))] += 1
+    topics = sorted(
+        [{"name": n, "count": c, "pct": round(c / total * 100, 1) if total else 0}
+         for n, c in topic_counts.items() if c > 0],
+        key=lambda x: x["count"], reverse=True,
+    )
+
+    # KB health from seed portals
+    kb_health = []
+    for p in load_portals():
+        last = p.get("last_seeded_at")
+        days_ago = None
+        if last:
+            try:
+                diff = datetime.utcnow() - datetime.fromisoformat(last.replace("Z", ""))
+                days_ago = diff.days
+            except Exception:
+                pass
+        kb_health.append({"name": p["name"], "chunks": p.get("last_chunk_count", 0),
+                          "last_seeded_at": last, "days_ago": days_ago})
+
+    return {
+        "period_days":      days,
+        "total_questions":  total,
+        "satisfaction_rate": round(fb_up / total_fb, 4) if total_fb else 0,
+        "fallback_rate":    round(fallbacks / total, 4) if total else 0,
+        "sources_count":    len(load_sources()),
+        "daily_counts":     daily_counts,
+        "top_questions":    top_questions,
+        "topics":           topics,
+        "kb_health":        kb_health,
+    }

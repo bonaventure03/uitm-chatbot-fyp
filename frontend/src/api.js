@@ -200,3 +200,11 @@ export async function getSeedJob(jobId) {
     headers: adminHeaders(),
   });
 }
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+
+export async function getAnalytics(days = 30) {
+  return adminFetch(`${API_BASE}/admin/analytics?days=${days}`, {
+    headers: adminHeaders(),
+  });
+}

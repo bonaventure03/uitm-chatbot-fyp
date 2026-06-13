@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from app.config import config
 from app.limiter import limiter
 from app.api import chat, admin, seed
-from app.api import auth, feedback
+from app.api import auth, feedback, analytics
 
 app = FastAPI(
     title="UiTM Campus Assistant API",
@@ -38,6 +38,7 @@ app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(seed.router)
 app.include_router(feedback.router)
+app.include_router(analytics.router)
 
 
 @app.get("/")

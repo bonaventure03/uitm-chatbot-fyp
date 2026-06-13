@@ -1,9 +1,10 @@
 """Chat API - the main student-facing endpoint."""
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
 
 from app.limiter import limiter
 from app.rag.generator import generator
+from app import db
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -28,7 +29,7 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("10/minute")
-async def chat(request: Request, req: ChatRequest):
+async def chat(request: Request, req: ChatRequest, background_tasks: BackgroundTasks):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
     if len(req.message) > _MAX_MESSAGE_LENGTH:
@@ -38,6 +39,7 @@ async def chat(request: Request, req: ChatRequest):
 
     try:
         result = generator.answer(req.message)
+        background_tasks.add_task(db.log_chat, req.message, bool(result.get("sources")))
         return ChatResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation error: {str(e)}")

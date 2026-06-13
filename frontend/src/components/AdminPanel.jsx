@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Globe, FileText, Type, HelpCircle, Link2, Trash2, Plus, Upload, X, Database, RefreshCw, Pencil, Save, GraduationCap, ThumbsDown, MessageSquare, ChevronDown, ChevronRight } from 'lucide-react';
+import { Globe, FileText, Type, HelpCircle, Link2, Trash2, Plus, Upload, X, Database, RefreshCw, Pencil, Save, MessageSquare, ChevronDown, ChevronRight, BarChart2, ThumbsDown } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import {
   listSources, addWebpage, addWebsite, addText, addDocument, addFAQ, deleteSource,
   listSeedPortals, addSeedPortal, updateSeedPortal, deleteSeedPortal, recrawlSeedPortal, runSeed, getSeedJob,
-  listFeedback, deleteFeedback,
+  listFeedback, deleteFeedback, getAnalytics,
 } from '../api';
 
 const SOURCE_TABS = [
@@ -16,11 +16,12 @@ const SOURCE_TABS = [
   { id: 'faq', label: 'FAQ', icon: HelpCircle },
 ];
 
-const MAIN_TABS = [
-  { id: 'portals', label: 'UiTM Portals', icon: GraduationCap },
-  { id: 'add-source', label: 'Add Data Source', icon: Plus },
-  { id: 'feedback', label: 'Negative Feedback', icon: ThumbsDown },
-];
+const PAGE_TITLES = {
+  'portals':    { title: 'UiTM Portals',      subtitle: 'Configure and manage seed portals for the knowledge base' },
+  'add-source': { title: 'Add Data Source',   subtitle: 'Index new websites, documents, or text into the vector database' },
+  'feedback':   { title: 'Negative Feedback', subtitle: 'Review and manage low-rated responses from students' },
+  'analytics':  { title: 'Analytics',         subtitle: 'Usage statistics and knowledge base health overview' },
+};
 
 function formatDate(isoString) {
   const d = new Date(isoString);
@@ -40,7 +41,10 @@ export default function AdminPanel({ onLogout, isDark, onToggleTheme }) {
 
   // Derive active tabs from the URL path
   const parts = pathname.split('/'); // ['', 'admin', 'portals'] or ['', 'admin', 'sources', 'website']
-  const mainTab = parts[2] === 'sources' ? 'add-source' : parts[2] === 'feedback' ? 'feedback' : 'portals';
+  const mainTab = parts[2] === 'sources' ? 'add-source'
+                : parts[2] === 'feedback'  ? 'feedback'
+                : parts[2] === 'analytics' ? 'analytics'
+                : 'portals';
   const rawSourceTab = parts[3] || 'website';
   const activeSourceTab = VALID_SOURCE_TABS.includes(rawSourceTab) ? rawSourceTab : 'website';
 
@@ -76,14 +80,16 @@ export default function AdminPanel({ onLogout, isDark, onToggleTheme }) {
     }
   }
 
+  const page = PAGE_TITLES[mainTab] ?? PAGE_TITLES['portals'];
+
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-uitm-cream/40 dark:bg-gray-950">
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 border-b border-uitm-border dark:border-gray-800 px-8 py-5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="font-display text-2xl font-semibold text-uitm-red dark:text-uitm-gold">Knowledge Base</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage the data sources that power the assistant</p>
+            <h1 className="font-display text-2xl font-semibold text-uitm-red dark:text-uitm-gold">{page.title}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{page.subtitle}</p>
           </div>
           <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
         </div>
@@ -93,33 +99,7 @@ export default function AdminPanel({ onLogout, isDark, onToggleTheme }) {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
 
           {/* ── Left panel ── */}
-          <section className={mainTab === 'feedback' ? 'lg:col-span-5' : 'lg:col-span-3'}>
-            {/* Top-level tab switcher */}
-            <div className="flex gap-2 mb-5">
-              {MAIN_TABS.map((t) => {
-                const Icon = t.icon;
-                const active = mainTab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      if (t.id === 'portals') navigate('/admin/portals');
-                      else if (t.id === 'feedback') navigate('/admin/feedback');
-                      else navigate(`/admin/sources/${activeSourceTab}`);
-                    }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border ${
-                      active
-                        ? 'bg-uitm-red text-white border-uitm-red'
-                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-uitm-border dark:border-gray-700 hover:border-uitm-gold'
-                    }`}
-                  >
-                    <Icon size={14} />
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-
+          <section className={(mainTab === 'feedback' || mainTab === 'analytics') ? 'lg:col-span-5' : 'lg:col-span-3'}>
             {/* Tab content */}
             {mainTab === 'portals' && (
               <SeedPortalsPanel
@@ -133,6 +113,10 @@ export default function AdminPanel({ onLogout, isDark, onToggleTheme }) {
                 showToast={showToast}
                 onAuthError={onLogout}
               />
+            )}
+
+            {mainTab === 'analytics' && (
+              <AnalyticsPanel onAuthError={onLogout} />
             )}
 
             {mainTab === 'add-source' && (
@@ -171,7 +155,7 @@ export default function AdminPanel({ onLogout, isDark, onToggleTheme }) {
           </section>
 
           {/* ── Right panel: Active Sources ── */}
-          {mainTab !== 'feedback' && (
+          {mainTab !== 'feedback' && mainTab !== 'analytics' && (
           <section className="lg:col-span-2">
             <h2 className="font-display text-lg font-semibold text-uitm-red dark:text-uitm-gold mb-4 flex items-center gap-2">
               <Database size={18} /> Active Sources
@@ -337,13 +321,13 @@ function DocumentForm({ onSuccess, onError }) {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <p className="text-sm text-gray-600 dark:text-gray-400">Upload PDF, DOCX, or TXT documents — ideal for password-protected portals (Permata, uFuture, iStudent) where you export documents manually.</p>
+      <p className="text-sm text-gray-600 dark:text-gray-400">Upload PDF, DOCX, TXT, or image files (PNG, JPG, etc.) — ideal for exported documents, screenshots of portals, or notice board images. Images are analysed with Claude Vision to extract their text and content.</p>
       <div>
         <FieldLabel>File</FieldLabel>
         <label className="flex items-center gap-2 border border-dashed border-uitm-border dark:border-gray-700 rounded-lg p-4 cursor-pointer hover:border-uitm-gold transition">
           <Upload size={18} className="text-uitm-gold" />
-          <span className="text-sm text-gray-700 dark:text-gray-300">{file ? file.name : 'Click to choose a file (PDF, DOCX, TXT)'}</span>
-          <input type="file" accept=".pdf,.docx,.txt,.md" className="hidden" onChange={(e) => setFile(e.target.files?.[0])} />
+          <span className="text-sm text-gray-700 dark:text-gray-300">{file ? file.name : 'Click to choose a file (PDF, DOCX, TXT, PNG, JPG…)'}</span>
+          <input type="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp" className="hidden" onChange={(e) => setFile(e.target.files?.[0])} />
         </label>
       </div>
       <div><FieldLabel>Portal Name (optional)</FieldLabel><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Permata - Past Exam Papers" /></div>
@@ -908,6 +892,209 @@ function AddPortalForm({ onAdd, onCancel }) {
         <p className="text-xs text-gray-400 dark:text-gray-500 ml-auto">Click <b>Update Seed</b> after adding to crawl the new portal.</p>
       </div>
     </form>
+  );
+}
+
+// ============ ANALYTICS PANEL ============
+
+const RANGE_OPTIONS = [
+  { label: '7d',  days: 7 },
+  { label: '30d', days: 30 },
+  { label: '90d', days: 90 },
+];
+
+function AnalyticsPanel({ onAuthError }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [days, setDays]       = useState(30);
+
+  useEffect(() => {
+    setLoading(true);
+    getAnalytics(days)
+      .then(setData)
+      .catch((e) => { if (e.status === 401) onAuthError(); })
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  return (
+    <div className="space-y-5">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-lg font-semibold text-uitm-red dark:text-uitm-gold flex items-center gap-2">
+          <BarChart2 size={18} /> Analytics
+        </h2>
+        <div className="flex gap-1">
+          {RANGE_OPTIONS.map(({ label, days: d }) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold border transition ${
+                days === d
+                  ? 'bg-uitm-red text-white border-uitm-red'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-uitm-border dark:border-gray-700 hover:border-uitm-gold'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-sm text-gray-500 dark:text-gray-400 py-10 text-center">Loading analytics…</div>
+      ) : !data ? null : (
+        <>
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Total Questions"  value={data.total_questions.toLocaleString()} icon="📨" />
+            <StatCard label="Satisfaction"     value={data.total_questions === 0 ? '—' : `${Math.round(data.satisfaction_rate * 100)}%`} icon="👍" color="text-emerald-500" />
+            <StatCard label="Fallback Rate"    value={data.total_questions === 0 ? '—' : `${Math.round(data.fallback_rate * 100)}%`}    icon="❓" color="text-amber-500" />
+            <StatCard label="Indexed Sources"  value={data.sources_count}                                                                icon="🗂" />
+          </div>
+
+          {/* Chart + Top questions */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <div className="lg:col-span-3 bg-white dark:bg-gray-900 rounded-xl border border-uitm-border dark:border-gray-800 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">Questions per Day <span className="normal-case font-normal">(last 14 days)</span></p>
+              <DailyChart data={data.daily_counts} />
+            </div>
+            <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-uitm-border dark:border-gray-800 overflow-hidden">
+              <div className="px-5 py-3 border-b border-uitm-border dark:border-gray-800">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Top Asked Questions</p>
+              </div>
+              <TopQuestionsTable rows={data.top_questions} />
+            </div>
+          </div>
+
+          {/* Topics + KB health */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-uitm-border dark:border-gray-800 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">Topic Distribution</p>
+              <TopicBars topics={data.topics} />
+            </div>
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-uitm-border dark:border-gray-800 overflow-hidden">
+              <div className="px-5 py-3 border-b border-uitm-border dark:border-gray-800">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Knowledge Base Health</p>
+              </div>
+              <KBHealthTable rows={data.kb_health} />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon, color = 'text-gray-900 dark:text-gray-100' }) {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-uitm-border dark:border-gray-800 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">{icon} {label}</p>
+      <p className={`text-3xl font-bold leading-none ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function DailyChart({ data }) {
+  if (!data || data.length === 0) return <p className="text-sm text-gray-400">No data yet.</p>;
+  const max = Math.max(...data.map(d => d.count), 1);
+  const W = 540, H = 140, PAD_L = 8, BAR_GAP = 4;
+  const barW = (W - PAD_L) / data.length - BAR_GAP;
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H + 22}`} className="overflow-visible">
+      {data.map((d, i) => {
+        const barH = Math.max((d.count / max) * H, d.count > 0 ? 4 : 0);
+        const x = PAD_L + i * ((W - PAD_L) / data.length);
+        const y = H - barH;
+        const isMax = d.count === max && max > 0;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={barW} height={barH} rx={3}
+              className={isMax ? 'fill-uitm-gold' : 'fill-uitm-red'}
+              opacity={0.85} />
+            <title>{`${d.date}: ${d.count} questions`}</title>
+            <text x={x + barW / 2} y={H + 14} textAnchor="middle"
+              className="fill-gray-400 dark:fill-gray-500 text-[9px]" fontSize={9}>
+              {d.date.slice(5)}
+            </text>
+            {d.count > 0 && (
+              <text x={x + barW / 2} y={y - 3} textAnchor="middle"
+                className="fill-gray-500 dark:fill-gray-400" fontSize={8}>
+                {d.count}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function TopQuestionsTable({ rows }) {
+  if (!rows || rows.length === 0) return (
+    <p className="text-sm text-gray-400 p-5">No questions logged yet.</p>
+  );
+  return (
+    <div className="divide-y divide-uitm-border dark:divide-gray-800">
+      {rows.map((r, i) => {
+        const sat = r.satisfaction;
+        const chipColor = sat === null ? 'text-gray-400' : sat >= 0.75 ? 'text-emerald-500' : sat >= 0.5 ? 'text-amber-500' : 'text-red-400';
+        return (
+          <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+            <span className="text-[11px] font-bold text-gray-400 w-4 flex-shrink-0">{i + 1}</span>
+            <p className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate">{r.question}</p>
+            <span className="text-xs font-semibold text-uitm-gold flex-shrink-0">{r.count}×</span>
+            <span className={`text-[11px] font-semibold flex-shrink-0 w-9 text-right ${chipColor}`}>
+              {sat !== null ? `${Math.round(sat * 100)}%` : '—'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TopicBars({ topics }) {
+  if (!topics || topics.length === 0) return <p className="text-sm text-gray-400">No data yet.</p>;
+  const max = Math.max(...topics.map(t => t.pct), 1);
+  return (
+    <div className="space-y-3">
+      {topics.map((t) => (
+        <div key={t.name}>
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-gray-700 dark:text-gray-300">{t.name}</span>
+            <span className="font-semibold text-gray-500 dark:text-gray-400">{t.pct}%</span>
+          </div>
+          <div className="h-1.5 bg-uitm-border dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-uitm-red to-uitm-gold"
+              style={{ width: `${(t.pct / max) * 100}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KBHealthTable({ rows }) {
+  if (!rows || rows.length === 0) return <p className="text-sm text-gray-400 p-5">No portals configured.</p>;
+  function badge(daysAgo) {
+    if (daysAgo === null) return <span className="text-[11px] text-gray-400">Never seeded</span>;
+    if (daysAgo <= 7)  return <span className="text-[11px] font-semibold text-emerald-500">✅ {daysAgo}d ago</span>;
+    if (daysAgo <= 30) return <span className="text-[11px] font-semibold text-amber-500">⚠️ {daysAgo}d ago</span>;
+    return <span className="text-[11px] font-semibold text-red-400">🔴 {daysAgo}d ago</span>;
+  }
+  return (
+    <div className="divide-y divide-uitm-border dark:divide-gray-800">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-3 px-5 py-2.5">
+          <p className="flex-1 text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{r.name}</p>
+          <span className="text-[11px] text-gray-400 flex-shrink-0">{r.chunks} chunks</span>
+          <span className="flex-shrink-0">{badge(r.days_ago)}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   GraduationCap, BookOpen, Calendar, Award, CalendarDays, DollarSign,
   HelpCircle, Settings, LogOut, LogIn, MessageSquare, X, Lock,
-  ExternalLink, ArrowLeft, Eye, EyeOff,
+  ExternalLink, ArrowLeft, Eye, EyeOff, Plus, ThumbsDown, BarChart2,
 } from 'lucide-react';
 import { loginAdmin, saveToken } from '../api';
 
@@ -13,6 +14,13 @@ const PORTALS = [
   { name: 'Convocation',        url: 'https://konvokesyen.uitm.edu.my/v2/',                              icon: Award },
   { name: 'Academic Calendar',  url: 'https://hea.uitm.edu.my/index.php/calendars/academic-calendar',   icon: CalendarDays },
   { name: 'Bendahari (Fees)',   url: 'https://bendahari.uitm.edu.my/',                                  icon: DollarSign },
+];
+
+const ADMIN_NAV = [
+  { id: 'portals',    label: 'Portals',  icon: GraduationCap, path: '/admin/portals' },
+  { id: 'add-source', label: 'Sources',  icon: Plus,          path: '/admin/sources/website' },
+  { id: 'feedback',   label: 'Feedback', icon: ThumbsDown,    path: '/admin/feedback' },
+  { id: 'analytics',  label: 'Analytics',icon: BarChart2,     path: '/admin/analytics' },
 ];
 
 const SUGGESTED = [
@@ -58,7 +66,10 @@ export default function QuickAccess({
   onChatClick,
   isAdminPage,
 }) {
-  const [open, setOpen]               = useState('portals');
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const [open, setOpen]               = useState(isAdminPage ? 'admin' : 'portals');
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [loginUser, setLoginUser]     = useState('');
   const [loginPass, setLoginPass]     = useState('');
@@ -208,9 +219,32 @@ export default function QuickAccess({
                 {/* Logged in */}
                 {isLoggedIn && (
                   <>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed pb-1">
-                      Signed in as administrator.
-                    </p>
+                    {/* Admin page nav */}
+                    {isAdminPage && (
+                      <nav className="space-y-0.5 pb-2 mb-2 border-b border-uitm-border dark:border-gray-800">
+                        {ADMIN_NAV.map((item) => {
+                          const Icon = item.icon;
+                          const active = item.id === 'add-source'
+                            ? pathname.startsWith('/admin/sources')
+                            : pathname.startsWith(item.path);
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => navigate(item.path)}
+                              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                                active
+                                  ? 'bg-uitm-maroon text-white'
+                                  : 'text-gray-700 dark:text-gray-300 hover:bg-uitm-cream dark:hover:bg-gray-800 hover:text-uitm-maroon dark:hover:text-uitm-gold'
+                              }`}
+                            >
+                              <Icon size={14} strokeWidth={1.75} />
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </nav>
+                    )}
+
                     {isAdminPage && (
                       <button
                         onClick={onAdminClick}

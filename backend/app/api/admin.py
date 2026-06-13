@@ -18,7 +18,7 @@ from app import db
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
+_ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
