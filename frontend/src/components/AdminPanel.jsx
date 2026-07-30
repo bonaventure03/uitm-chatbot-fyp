@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Globe, FileText, Type, HelpCircle, Link2, Trash2, Plus, Upload, X, Database, RefreshCw, Pencil, Save, MessageSquare, ChevronDown, ChevronRight, BarChart2, ThumbsDown } from 'lucide-react';
+import { Globe, FileText, Type, HelpCircle, Link2, Trash2, Plus, Upload, X, Database, RefreshCw, Pencil, Save, MessageSquare, ChevronDown, ChevronRight, BarChart2, ThumbsDown, AlertTriangle } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import {
   listSources, addWebpage, addWebsite, addText, addDocument, addFAQ, deleteSource,
@@ -944,10 +944,22 @@ function AnalyticsPanel({ onAuthError }) {
         <div className="text-sm text-gray-500 dark:text-gray-400 py-10 text-center">Loading analytics…</div>
       ) : !data ? null : (
         <>
+          {/* Chat logging is broken — say so instead of showing a page of zeros */}
+          {data.log_error && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+              <AlertTriangle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-800 dark:text-amber-200">
+                <p className="font-semibold mb-0.5">Chat logging unavailable — usage stats below will stay empty.</p>
+                <p className="opacity-80">Run <code>backend/supabase_schema.sql</code> in the Supabase SQL Editor to create the <code>chat_logs</code> table.</p>
+                <p className="opacity-60 mt-1 font-mono break-all">{data.log_error}</p>
+              </div>
+            </div>
+          )}
+
           {/* Stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Total Questions"  value={data.total_questions.toLocaleString()} icon="📨" />
-            <StatCard label="Satisfaction"     value={data.total_questions === 0 ? '—' : `${Math.round(data.satisfaction_rate * 100)}%`} icon="👍" color="text-emerald-500" />
+            <StatCard label="Satisfaction"     value={!data.feedback_count ? '—' : `${Math.round(data.satisfaction_rate * 100)}%`} icon="👍" color="text-emerald-500" />
             <StatCard label="Fallback Rate"    value={data.total_questions === 0 ? '—' : `${Math.round(data.fallback_rate * 100)}%`}    icon="❓" color="text-amber-500" />
             <StatCard label="Indexed Sources"  value={data.sources_count}                                                                icon="🗂" />
           </div>

@@ -30,6 +30,22 @@ _TOPICS = [
     ("Convocation",         ["convo", "convocation", "graduation", "scroll", "ceremony"]),
 ]
 
+def _parse_ts(value: str) -> Optional[datetime]:
+    """Parse an ISO timestamp to naive UTC.
+
+    Supabase returns tz-aware strings ("...+00:00") while the local JSON
+    fallback writes naive ones — normalise both so they can be compared
+    against ``datetime.utcnow()``.
+    """
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return (dt - dt.utcoffset()).replace(tzinfo=None)
+
+
 def _classify_topic(question: str) -> str:
     q = question.lower()
     for topic, keywords in _TOPICS:
@@ -207,8 +223,10 @@ def log_chat(question: str, had_answer: bool) -> None:
                 json.dump(logs, f)
         else:
             c.table("chat_logs").insert(entry).execute()
-    except Exception:
-        pass
+    except Exception as e:
+        # Never break the chat over a logging failure, but don't hide it either —
+        # a missing chat_logs table silently empties the whole analytics panel.
+        print(f"[log_chat] failed: {type(e).__name__}: {e}")
 
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
@@ -218,6 +236,7 @@ def get_analytics(days: int = 30) -> dict:
     c = _client()
 
     # Chat logs
+    log_error = None
     if c is None:
         logs = [l for l in _load_chat_logs() if l.get("created_at", "") >= cutoff]
         fb_up = fb_down = 0
@@ -225,8 +244,12 @@ def get_analytics(days: int = 30) -> dict:
     else:
         try:
             logs = (c.table("chat_logs").select("*").gte("created_at", cutoff).execute().data or [])
-        except Exception:
+        except Exception as e:
+            # Surfaced to the admin panel — otherwise a missing table just looks
+            # like "nobody has asked anything yet".
             logs = []
+            log_error = f"{type(e).__name__}: {e}"
+            print(f"[analytics] could not read chat_logs: {log_error}")
         try:
             fb_rows = (c.table("feedback").select("question,rating").gte("created_at", cutoff).execute().data or [])
             fb_up   = sum(1 for r in fb_rows if r["rating"] == "up")
@@ -281,22 +304,19 @@ def get_analytics(days: int = 30) -> dict:
     kb_health = []
     for p in load_portals():
         last = p.get("last_seeded_at")
-        days_ago = None
-        if last:
-            try:
-                diff = datetime.utcnow() - datetime.fromisoformat(last.replace("Z", ""))
-                days_ago = diff.days
-            except Exception:
-                pass
+        parsed = _parse_ts(last) if last else None
+        days_ago = (datetime.utcnow() - parsed).days if parsed else None
         kb_health.append({"name": p["name"], "chunks": p.get("last_chunk_count", 0),
                           "last_seeded_at": last, "days_ago": days_ago})
 
     return {
         "period_days":      days,
         "total_questions":  total,
+        "feedback_count":   total_fb,
         "satisfaction_rate": round(fb_up / total_fb, 4) if total_fb else 0,
         "fallback_rate":    round(fallbacks / total, 4) if total else 0,
         "sources_count":    len(load_sources()),
+        "log_error":        log_error,
         "daily_counts":     daily_counts,
         "top_questions":    top_questions,
         "topics":           topics,
