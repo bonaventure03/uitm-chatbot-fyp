@@ -1,5 +1,7 @@
 # UiTM Campus Assistant Chatbot
 
+Access online at https://uitm-chatbot.vercel.app/
+
 A RAG-powered chatbot that answers UiTM Samarahan student queries with step-by-step guides and portal links.
 
 **Final Year Project** — CSP600 / CSP650, Bonaventure Tindin, CDCS2303A
